@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api';
-import { products as localProducts } from '../data/products';
+import { api, resolveUploadUrl } from '../lib/api';
+import { products as localProducts, type Product } from '../data/products';
 import type { Order, OrderTracking, ReturnRequest } from '../lib/api';
 
 const allStatuses = ['Pending', 'Processing', 'Dispatched', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
@@ -59,21 +59,25 @@ export default function AdminOrders() {
   const [orderNotes, setOrderNotes] = useState('');
   const [trackingLink, setTrackingLink] = useState('');
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
-  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [products, setProducts] = useState<Product[]>(localProducts);
 
   const loadProducts = async () => {
-    const map: Record<string, string> = {};
-    localProducts.forEach((p) => { map[p.id] = p.name; });
+    const merged = new Map<string, Product>();
+    localProducts.forEach((p) => merged.set(p.id, p));
     try {
-      const ps = await api.products.getAll();
-      ps.forEach((p) => { map[p.id] = p.name; });
+      (await api.products.getAll()).forEach((p) => merged.set(p.id, p));
     } catch {
       // keep local fallback
     }
-    setProductNames(map);
+    setProducts([...merged.values()]);
   };
 
-  const productName = (id: string) => productNames[id] || id;
+  const productName = (id: string) => products.find((p) => p.id === id)?.name || id;
+
+  const productImage = (id: string, colorIndex?: number) => {
+    const p = products.find((x) => x.id === id);
+    return p?.variants?.[colorIndex ?? 0]?.images?.[0] || p?.variants?.[0]?.images?.[0] || '';
+  };
 
   const loadOrders = async () => {
     try {
@@ -295,12 +299,31 @@ export default function AdminOrders() {
                     </div>
                     <div className="admin-order-card-detail-section">
                       <span className="admin-order-card-detail-title">Items</span>
-                      {order.items?.map((item, i) => (
-                        <div key={i} className="admin-order-card-detail-text" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem' }}>
-                          <span>{productName(item.id)} × {item.qty}</span>
-                          {(item as any).cancelled && <span style={{ fontSize:'0.68rem', background:'#fee2e2', color:'#991b1b', padding:'2px 6px', borderRadius:10, fontWeight:700 }}>❌ CANCELLED{(item as any).cancelReason ? `: ${(item as any).cancelReason}` : ''}</span>}
-                        </div>
-                      )) || <div className="admin-order-card-detail-text muted">N/A</div>}
+                      {order.items?.map((item, i) => {
+                        const img = productImage(item.id, item.colorIndex);
+                        return (
+                          <div key={i} className="admin-order-card-item">
+                            {img ? (
+                              <img
+                                src={resolveUploadUrl(img)}
+                                alt={productName(item.id)}
+                                loading="lazy"
+                                decoding="async"
+                                width={400}
+                                height={400}
+                                onError={(e) => { const t = e.currentTarget; t.style.visibility = 'hidden'; }}
+                                className="admin-order-card-item-img"
+                              />
+                            ) : (
+                              <div className="admin-order-card-item-img admin-order-card-item-img-empty">📦</div>
+                            )}
+                            <div className="admin-order-card-item-info">
+                              <span className="admin-order-card-detail-text">{productName(item.id)} × {item.qty}</span>
+                              {(item as any).cancelled && <span style={{ fontSize: '0.68rem', background: '#fee2e2', color: '#991b1b', padding: '2px 6px', borderRadius: 10, fontWeight: 700 }}>❌ CANCELLED{(item as any).cancelReason ? `: ${(item as any).cancelReason}` : ''}</span>}
+                            </div>
+                          </div>
+                        );
+                      }) || <div className="admin-order-card-detail-text muted">N/A</div>}
                     </div>
                     <div className="admin-order-card-detail-section">
                       <span className="admin-order-card-detail-title">Payment & Total</span>

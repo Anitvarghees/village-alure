@@ -35,9 +35,13 @@ const orderSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Customer email is required for order confirmation'],
     trim: true,
     lowercase: true,
+    default: '',
+  },
+  paymentId: {
+    type: String,
+    default: '',
   },
   payment: {
     type: String,

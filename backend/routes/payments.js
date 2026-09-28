@@ -86,7 +86,7 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({ error: 'Payment signature verification failed' });
     }
 
-    res.json({ verified: true });
+    res.json({ verified: true, paymentId: razorpay_payment_id, orderId: razorpay_order_id });
   } catch (error) {
     console.error('Razorpay verify error:', error);
     res.status(500).json({ error: 'Payment verification failed' });

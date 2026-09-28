@@ -110,6 +110,7 @@ export interface Order {
   phone: string;
   email?: string;
   payment: string;
+  paymentId?: string;
   date: string;
   items: { id: string; colorIndex: number; qty: number; cancelled?: boolean }[];
   status: 'Pending' | 'Processing' | 'Dispatched' | 'Shipped' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
@@ -309,7 +310,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/orders/track/${orderId}`);
       return handleResponse(res);
     },
-    create: async (order: { total: number; name: string; phone: string; email?: string; payment: string; items: { id: string; colorIndex: number; qty: number }[]; address?: string; city?: string; state?: string; pincode?: string }) => {
+    create: async (order: { total: number; name: string; phone: string; email?: string; payment: string; paymentId?: string; items: { id: string; colorIndex: number; qty: number }[]; address?: string; city?: string; state?: string; pincode?: string }) => {
       const res = await fetch(`${API_BASE}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

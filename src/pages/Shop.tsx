@@ -20,7 +20,10 @@ const SORT_OPTIONS = [
 ];
 
 const PRICE_RANGES = [
-  { label: '₹3,000 and Below', min: 0, max: 3000 },
+  { label: '₹500 and Below', min: 0, max: 500 },
+  { label: '₹501 – ₹1,000', min: 501, max: 1000 },
+  { label: '₹1,001 – ₹2,000', min: 1001, max: 2000 },
+  { label: '₹2,001 – ₹3,000', min: 2001, max: 3000 },
   { label: '₹3,001 – ₹5,000', min: 3001, max: 5000 },
   { label: '₹5,001 – ₹8,000', min: 5001, max: 8000 },
   { label: '₹8,001 – ₹15,000', min: 8001, max: 15000 },
@@ -185,7 +188,9 @@ export default function Shop({ likedProducts, onToggleLike }: ShopProps) {
 
   const rangeLabel = sliderMin === SLIDER_MIN && sliderMax >= SLIDER_MAX
     ? 'All Prices'
-    : `${formatPrice(sliderMin)} – ${sliderMax >= SLIDER_MAX ? '₹30k+' : formatPrice(sliderMax)}`;
+    : sliderMin === SLIDER_MIN
+      ? `Up to ${formatPrice(sliderMax)}`
+      : `${formatPrice(sliderMin)} – ${sliderMax >= SLIDER_MAX ? '₹30k+' : formatPrice(sliderMax)}`;
 
   /* ─── Shared filter content (used in sidebar + drawer) ─── */
   const FilterContent = ({ onApply }: { onApply?: () => void }) => (
@@ -243,8 +248,8 @@ export default function Shop({ likedProducts, onToggleLike }: ShopProps) {
           />
         </div>
         <div className="slider-dots">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="slider-dot" />
+          {PRICE_RANGES.map((range) => (
+            <div key={range.label} className="slider-dot" />
           ))}
         </div>
 

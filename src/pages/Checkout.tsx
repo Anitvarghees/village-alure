@@ -74,13 +74,14 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const finalizeOrder = useCallback(async (orderItems: { id: string; colorIndex: number; qty: number }[], paymentMethod: string) => {
+  const finalizeOrder = useCallback(async (orderItems: { id: string; colorIndex: number; qty: number }[], paymentMethod: string, paymentId = '') => {
     const result = await api.orders.create({
       total,
       name: form.name,
       email: form.email,
       phone: form.phone,
       payment: paymentMethod,
+      paymentId,
       items: orderItems,
       address: form.address,
       city: form.city,
@@ -148,7 +149,7 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
       handler: async (response: RazorpayResponse) => {
         try {
           await api.payments.verify(response);
-          await finalizeOrder(orderItems, 'Paid via Razorpay');
+          await finalizeOrder(orderItems, 'Paid via Razorpay', response.razorpay_payment_id);
         } catch {
           setError('Payment verification failed. Please contact support.');
           setLoading(false);

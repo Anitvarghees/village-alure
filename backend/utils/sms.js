@@ -36,13 +36,23 @@ export async function sendOrderConfirmationSMS(order) {
     return `${name} x${item.qty || 1}`;
   }).join(', ');
 
+  const isPaid = !!order.payment && order.payment !== 'COD';
+
   const variables = {
-    name: order.name.split(' ')[0],
+    name: (order.name || '').split(' ')[0] || 'Customer',
+    firstName: (order.name || '').split(' ')[0] || 'Customer',
     orderId: order.orderId,
+    order_id: order.orderId,
     total: `₹${order.total.toLocaleString('en-IN')}`,
+    amount: `₹${order.total.toLocaleString('en-IN')}`,
     items: itemList,
+    itemList,
     phone: order.phone,
     payment: order.payment,
+    paymentMethod: order.payment,
+    paymentStatus: isPaid ? 'Paid' : 'Due on delivery',
+    paymentId: order.paymentId || '',
+    status: 'Order Successful',
   };
 
   try {
@@ -60,10 +70,10 @@ export async function sendOrderConfirmationSMS(order) {
     });
 
     const data = await response.json();
-    if (response.ok) {
+    if (response.ok && (data.type === 'success' || data.status === 'success' || !data.type)) {
       console.log(`SMS sent to ${order.phone} for order ${order.orderId}`);
     } else {
-      console.error('MSG91 SMS error:', data);
+      console.error('MSG91 SMS error:', JSON.stringify(data));
     }
   } catch (error) {
     console.error('Failed to send SMS:', error.message);

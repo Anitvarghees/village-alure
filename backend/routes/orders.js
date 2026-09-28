@@ -3,8 +3,9 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Notification from '../models/Notification.js';
 import auth from '../middleware/auth.js';
-import { sendOrderConfirmation, sendOrderStatusUpdate } from '../utils/email.js';
+import { sendOrderConfirmation, sendOrderStatusUpdate, sendPaymentConfirmation } from '../utils/email.js';
 import { sendOrderConfirmationSMS } from '../utils/sms.js';
+import { sendOrderWhatsApp, sendOrderStatusWhatsApp } from '../utils/whatsapp.js';
 
 const router = express.Router();
 
@@ -103,6 +104,9 @@ router.put('/cancel/:orderId', async (req, res) => {
       order.tracking.push({ status: 'Cancelled', timestamp: new Date(), message: `Product ${productId} cancelled: ${reason || 'by customer'}` });
       await order.save();
       try { await Notification.create({ type: 'cancellation', title: 'Product Cancelled', message: `Customer ${order.name} cancelled product ${productId} from order ${order.orderId}. Reason: ${reason || 'N/A'}`, orderId: order.orderId, productId, phone: order.phone }); } catch (_) {}
+      if (order.status === 'Cancelled') {
+        sendOrderStatusWhatsApp(order, 'Cancelled', order.notes).catch((err) => console.error('WhatsApp status send failed:', err.message));
+      }
       res.json(order);
     } else {
       order.status = 'Cancelled';
@@ -125,6 +129,7 @@ router.put('/cancel/:orderId', async (req, res) => {
 
       await order.save();
       try { await Notification.create({ type: 'cancellation', title: 'Order Cancelled', message: `Customer ${order.name} cancelled entire order ${order.orderId}. Reason: ${reason || 'N/A'}`, orderId: order.orderId, phone: order.phone }); } catch (_) {}
+      sendOrderStatusWhatsApp(order, 'Cancelled', order.notes).catch((err) => console.error('WhatsApp status send failed:', err.message));
       res.json(order);
     }
   } catch (error) {
@@ -170,7 +175,9 @@ router.post('/', async (req, res) => {
     await order.save();
 
     sendOrderConfirmation(order).catch((err) => console.error('Email send failed:', err.message));
+    sendPaymentConfirmation(order).catch((err) => console.error('Payment email send failed:', err.message));
     sendOrderConfirmationSMS(order).catch((err) => console.error('SMS send failed:', err.message));
+    sendOrderWhatsApp(order).catch((err) => console.error('WhatsApp send failed:', err.message));
 
     const productIds = order.items.map((item) => item.id);
     const products = await Product.find({ _id: { $in: productIds } }).lean();
@@ -234,6 +241,7 @@ router.put('/:id/status', auth, async (req, res) => {
 
     const statusMessage = message || `Status updated to ${status}`;
     sendOrderStatusUpdate(order, status, statusMessage).catch(() => {});
+    sendOrderStatusWhatsApp(order, status, statusMessage).catch((err) => console.error('WhatsApp status send failed:', err.message));
 
     if (status === 'Dispatched') {
       const notifMsg = `Order ${order.orderId} dispatched for ${order.name}. Phone: ${order.phone}${order.email ? ', Email: ' + order.email : ''}. Tracking: ${trackingLink || 'N/A'}`;
