@@ -91,6 +91,7 @@ router.put('/cancel/:orderId', async (req, res) => {
         const product = await Product.findById(productId);
         if (product) {
           product.quantity = (product.quantity || 0) + (item.qty || 1);
+          product.inStock = product.quantity > 0;
           await product.save();
         }
       } catch (_) {}
@@ -121,6 +122,7 @@ router.put('/cancel/:orderId', async (req, res) => {
             const product = await Product.findById(item.id);
             if (product) {
               product.quantity = (product.quantity || 0) + (item.qty || 1);
+              product.inStock = product.quantity > 0;
               await product.save();
             }
           }
@@ -142,20 +144,24 @@ router.post('/', async (req, res) => {
   try {
     const { items } = req.body;
 
-    // Validate stock availability and decrease quantity
+    // Validate stock availability for every item first, then decrease quantity
     if (items && items.length > 0) {
+      const products = [];
       for (const item of items) {
         const product = await Product.findById(item.id);
-        if (product) {
-          const currentQty = product.quantity || 0;
-          if (currentQty > 0 && currentQty < item.qty) {
-            return res.status(400).json({ error: `Not enough stock for "${product.name}". Only ${currentQty} pieces available.` });
-          }
-          if (currentQty > 0) {
-            product.quantity = Math.max(0, currentQty - item.qty);
-            await product.save();
-          }
+        if (!product) continue;
+        const currentQty = Number(product.quantity) || 0;
+        if (currentQty < item.qty) {
+          return res.status(400).json({ error: currentQty <= 0
+            ? `"${product.name}" is out of stock.`
+            : `Not enough stock for "${product.name}". Only ${currentQty} pieces available.` });
         }
+        products.push({ product, currentQty, qty: item.qty });
+      }
+      for (const { product, currentQty, qty } of products) {
+        product.quantity = Math.max(0, currentQty - qty);
+        product.inStock = product.quantity > 0;
+        await product.save();
       }
     }
 

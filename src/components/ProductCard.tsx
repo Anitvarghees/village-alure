@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { Product } from '../data/products';
+import { isOutOfStock } from '../data/products';
 import { resolveUploadUrl } from '../lib/api';
 
 interface ProductCardProps {
@@ -15,6 +16,7 @@ const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 
 export default function ProductCard({ product, index = 0, isLiked = false, onToggleLike }: ProductCardProps) {
   const [hovered, setHovered] = useState(false);
+  const soldOut = isOutOfStock(product);
   const primary = product.variants[0] ?? { images: [], colorName: '', hex: '#ccc' };
   const img0 = resolveUploadUrl(primary.images[0] || '') || PLACEHOLDER;
   const img1 = resolveUploadUrl(primary.images[1] || primary.images[0] || '') || img0;
@@ -65,7 +67,7 @@ export default function ProductCard({ product, index = 0, isLiked = false, onTog
               crossOrigin="anonymous"
               width={400}
               height={500}
-              animate={{ opacity: hovered ? 0 : 1 }}
+              animate={{ opacity: hovered ? 0 : soldOut ? 0.5 : 1 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: hovered ? 'scale(1.08)' : 'none', aspectRatio: '4 / 5' }}
               onError={(e) => { const t = e.target as HTMLImageElement; if (!t.dataset.fallback) { t.dataset.fallback='1'; t.src = PLACEHOLDER; } }}
@@ -78,7 +80,7 @@ export default function ProductCard({ product, index = 0, isLiked = false, onTog
               crossOrigin="anonymous"
               width={400}
               height={500}
-              animate={{ opacity: hovered ? 1 : 0 }}
+              animate={{ opacity: hovered ? (soldOut ? 0.5 : 1) : 0 }}
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: hovered ? 'scale(1.08)' : 'none', aspectRatio: '4 / 5' }}
               onError={(e) => { const t = e.target as HTMLImageElement; if (!t.dataset.fallback) { t.dataset.fallback='1'; t.src = PLACEHOLDER; } }}
@@ -197,7 +199,30 @@ export default function ProductCard({ product, index = 0, isLiked = false, onTog
               >
                 ₹{product.price.toLocaleString('en-IN')}
               </span>
-              {product.mrp && (
+            {soldOut && (
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: 12,
+                  left: 12,
+                  zIndex: 6,
+                  background: 'rgba(36,27,21,0.88)',
+                  color: '#fff',
+                  padding: '0.35rem 0.7rem',
+                  fontSize: '0.7rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 600,
+                  borderRadius: 'var(--radius-sm)',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                Out of Stock
+              </span>
+            )}
+
+            {product.mrp && (
                 <span
                   style={{
                     fontSize: '0.9rem',

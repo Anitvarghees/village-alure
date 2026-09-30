@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getProduct } from '../lib/productStore';
 import type { CartItem } from '../data/products';
+import { isOutOfStock, getQuantity } from '../data/products';
 import ZariDivider from '../components/ZariDivider';
 import { api, resolveUploadUrl } from '../lib/api';
 import { writeUser } from '../lib/auth';
@@ -65,7 +66,8 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
 
   const items = cart
     .map((ci) => ({ ci, product: getProduct(ci.id) }))
-    .filter((row) => row.product !== undefined);
+    .filter((row) => row.product !== undefined)
+    .map((row) => ({ ...row, soldOut: isOutOfStock(row.product) }));
   const subtotal = items.reduce((sum, { ci, product }) => sum + product!.price * ci.qty, 0);
   const shipping = 0;
   const total = subtotal + shipping;
@@ -185,8 +187,15 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
       // Check stock availability before placing order
       for (const ci of cart) {
         const product = getProduct(ci.id);
-        if (product && (product as any).quantity != null && (product as any).quantity > 0 && ci.qty > (product as any).quantity) {
-          setError(`Not enough stock for "${product.name}". Only ${(product as any).quantity} piece(s) available.`);
+        if (!product) continue;
+        if (isOutOfStock(product)) {
+          setError(`"${product.name}" is out of stock. Please remove it from your bag.`);
+          setLoading(false);
+          return;
+        }
+        const available = getQuantity(product);
+        if (available > 0 && ci.qty > available) {
+          setError(`Not enough stock for "${product.name}". Only ${available} piece(s) available.`);
           setLoading(false);
           return;
         }
@@ -392,7 +401,7 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
         <div style={{ background: 'var(--ivory-deep)', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: '1.5rem', position: 'sticky', top: '120px' }}>
           <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem' }}>Your Order</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', marginBottom: '1rem' }}>
-            {items.map(({ ci, product }) => (
+            {items.map(({ ci, product, soldOut }) => (
               <div key={`${ci.id}-${ci.colorIndex}`} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 <img
                   src={resolveUploadUrl(product!.variants[ci.colorIndex]?.images[0] ?? product!.variants[0].images[0])}
@@ -402,11 +411,16 @@ export default function Checkout({ cart, clearCart }: CheckoutProps) {
                   width={46}
                   height={58}
                   onError={(e) => { const t = e.target as HTMLImageElement; if (!t.dataset.fallback) { t.dataset.fallback='1'; t.src='https://images.pexels.com/photos/5585346/pexels-photo-5585346.jpeg?w=200'; } }}
-                  style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 'var(--radius-sm)', flexShrink: 0, aspectRatio: '46 / 58' }}
+                  style={{ width: 46, height: 58, objectFit: 'cover', borderRadius: 'var(--radius-sm)', flexShrink: 0, aspectRatio: '46 / 58', opacity: soldOut ? 0.5 : 1 }}
                 />
                 <div style={{ flex: 1, minWidth: 0, fontSize: '0.82rem', lineHeight: 1.3 }}>
                   <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product!.name}</div>
                   <div style={{ color: 'var(--ink-soft)' }}>Qty {ci.qty}</div>
+                  {soldOut && (
+                    <div style={{ color: '#dc2626', fontWeight: 700, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Out of Stock
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontFamily: 'var(--font-body)', color: 'var(--maroon)', fontSize: '0.9rem' }}>
                   ₹{(product!.price * ci.qty).toLocaleString('en-IN')}

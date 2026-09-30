@@ -80,3 +80,14 @@ export const collections: Collection[] = [
 ];
 
 export const getProduct = (id: string) => products.find((p) => p.id === id);
+
+export const getQuantity = (product: Product | null | undefined): number => {
+  const qty = Number((product as any)?.quantity);
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
+};
+
+export const isOutOfStock = (product: Product | null | undefined): boolean => {
+  if (!product) return false;
+  if (product.inStock === false) return true;
+  return getQuantity(product) <= 0;
+};

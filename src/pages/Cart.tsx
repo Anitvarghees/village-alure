@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getProduct } from '../lib/productStore';
 import { resolveUploadUrl } from '../lib/api';
 import type { CartItem } from '../data/products';
+import { isOutOfStock, getQuantity } from '../data/products';
 import ZariDivider from '../components/ZariDivider';
 
 interface CartProps {
@@ -23,7 +24,12 @@ export default function Cart({ cart, updateQty, removeFromCart }: CartProps) {
   };
   const items = cart
     .map((ci) => ({ ci, product: getProduct(ci.id) }))
-    .filter((row) => row.product !== undefined);
+    .filter((row) => row.product !== undefined)
+    .map((row) => ({
+      ...row,
+      soldOut: isOutOfStock(row.product),
+      available: getQuantity(row.product),
+    }));
 
   const subtotal = items.reduce((sum, { ci, product }) => sum + product!.price * ci.qty, 0);
   const mrpTotal = items.reduce((sum, { ci, product }) => sum + (product!.mrp ?? product!.price) * ci.qty, 0);
@@ -67,7 +73,7 @@ export default function Cart({ cart, updateQty, removeFromCart }: CartProps) {
           {/* Items */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <AnimatePresence>
-              {items.map(({ ci, product }) => (
+              {items.map(({ ci, product, soldOut, available }) => (
                 <motion.div
                   key={`${ci.id}-${ci.colorIndex}`}
                   layout
@@ -105,9 +111,14 @@ export default function Cart({ cart, updateQty, removeFromCart }: CartProps) {
                         <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
                           {product!.variants[ci.colorIndex]?.colorName ?? product!.variants[0].colorName}
                         </div>
-                        {(product as any).quantity != null && (product as any).quantity > 0 && (product as any).quantity <= 2 && (
+                        {soldOut && (
+                          <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700, marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Out of Stock
+                          </div>
+                        )}
+                        {!soldOut && available > 0 && available <= 2 && (
                           <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600, marginTop: 2 }}>
-                            Only {(product as any).quantity} left
+                            Only {available} left
                           </div>
                         )}
                       </div>
@@ -135,8 +146,16 @@ export default function Cart({ cart, updateQty, removeFromCart }: CartProps) {
                           onClick={() => updateQty(ci.id, ci.colorIndex, ci.qty + 1)}
                           aria-label="Increase quantity"
                           className="qty-btn"
-                          disabled={(product as any).quantity != null && (product as any).quantity > 0 && ci.qty >= (product as any).quantity}
-                          style={{ borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--ivory)', cursor: (product as any).quantity != null && (product as any).quantity > 0 && ci.qty >= (product as any).quantity ? 'not-allowed' : 'pointer', fontSize: '1rem', lineHeight: 1, opacity: (product as any).quantity != null && (product as any).quantity > 0 && ci.qty >= (product as any).quantity ? 0.4 : 1 }}
+                          disabled={soldOut || (available > 0 && ci.qty >= available)}
+                          style={{
+                            borderRadius: '50%',
+                            border: '1px solid var(--line)',
+                            background: 'var(--ivory)',
+                            cursor: soldOut || (available > 0 && ci.qty >= available) ? 'not-allowed' : 'pointer',
+                            fontSize: '1rem',
+                            lineHeight: 1,
+                            opacity: soldOut || (available > 0 && ci.qty >= available) ? 0.4 : 1,
+                          }}
                         >
                           +
                         </button>

@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getProduct, products as localProducts } from '../data/products';
+import { getProduct, products as localProducts, isOutOfStock, getQuantity } from '../data/products';
 import Accordion from '../components/Accordion';
 import ProductCard from '../components/ProductCard';
 import ZariDivider from '../components/ZariDivider';
@@ -113,8 +113,11 @@ export default function Product({ onAddToBag, likedProducts, onToggleLike }: Pro
 
   const variant = product.variants[variantIndex];
   const currentImageSrc = resolveUploadUrl(variant.images[imageIndex] || '');
+  const soldOut = isOutOfStock(product);
+  const qtyLeft = getQuantity(product);
 
   const handleAdd = () => {
+    if (soldOut) return;
     if (added) {
       setAlreadyAdded(true);
       setTimeout(() => setAlreadyAdded(false), 2000);
@@ -314,10 +317,18 @@ export default function Product({ onAddToBag, likedProducts, onToggleLike }: Pro
             )}
           </div>
 
-          {(product as any).quantity != null && (product as any).quantity > 0 && (product as any).quantity <= 2 && (
+          {soldOut && (
+            <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.85rem', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              <span style={{ fontSize: '0.84rem', color: '#991b1b', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Out of Stock</span>
+              <span style={{ fontSize: '0.8rem', color: '#b91c1c' }}>— this item is currently unavailable</span>
+            </div>
+          )}
+
+          {!soldOut && qtyLeft > 0 && qtyLeft <= 2 && (
             <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.85rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span style={{ fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>Only {(product as any).quantity} piece{(product as any).quantity === 1 ? '' : 's'} left — order soon!</span>
+              <span style={{ fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>Only {qtyLeft} piece{qtyLeft === 1 ? '' : 's'} left — order soon!</span>
             </div>
           )}
 
@@ -360,12 +371,31 @@ export default function Product({ onAddToBag, likedProducts, onToggleLike }: Pro
 
           <motion.button
             onClick={handleAdd}
-            whileTap={{ scale: 0.96 }}
+            whileTap={soldOut ? undefined : { scale: 0.96 }}
+            disabled={soldOut}
             className="btn btn-solid"
-            style={{ width: '100%', justifyContent: 'center', marginTop: '2.25rem', padding: '1.05rem' }}
+            style={{
+              width: '100%',
+              justifyContent: 'center',
+              marginTop: '2.25rem',
+              padding: '1.05rem',
+              opacity: soldOut ? 0.55 : 1,
+              cursor: soldOut ? 'not-allowed' : 'pointer',
+              filter: soldOut ? 'grayscale(0.4)' : undefined,
+              pointerEvents: soldOut ? 'none' : undefined,
+            }}
           >
             <AnimatePresence mode="wait" initial={false}>
-              {added ? (
+              {soldOut ? (
+                <motion.span
+                  key="soldout"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                >
+                  Out of Stock
+                </motion.span>
+              ) : added ? (
                 <motion.span
                   key="added"
                   initial={{ opacity: 0, y: 6 }}

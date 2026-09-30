@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, resolveUploadUrl } from '../lib/api';
 import type { Product } from '../data/products';
+import { isOutOfStock, getQuantity } from '../data/products';
 import type { Category } from '../lib/api';
 
 interface Variant {
@@ -28,7 +29,8 @@ const emptyProduct: Product = {
   featured: false,
   isNew: false,
   isBestSeller: false,
-  inStock: true,
+  inStock: false,
+  quantity: 0,
   returnable: true,
   returnWindow: 7,
   replacementAvailable: true,
@@ -168,8 +170,9 @@ export default function AdminProducts() {
   };
 
   const openEdit = (product: Product) => {
+    const qty = Math.max(0, Number((product as any).quantity ?? 0));
     setEditing(product);
-    setForm({ ...product });
+    setForm({ ...product, quantity: qty, inStock: qty > 0 ? product.inStock !== false : false } as Product);
     setActiveVariantTab(0);
     setShowModal(true);
   };
@@ -194,21 +197,28 @@ export default function AdminProducts() {
 
   const handleSave = async () => {
     if (!validate()) return;
+    const qty = Math.max(0, Math.floor(Number((form as any).quantity ?? 0)) || 0);
+    const payload = {
+      ...form,
+      quantity: qty,
+      inStock: qty > 0 ? form.inStock !== false : false,
+    } as Product;
     try {
       if (editing) {
-        const updated: any = await api.products.update(editing.id, form);
+        const updated: any = await api.products.update(editing.id, payload);
         setProducts((prev) => {
           const rest = prev.filter((p) => p.id !== editing.id);
-          const merged = updated?.id ? updated : { ...form, createdAt: new Date().toISOString() } as any;
+          const merged = updated?.id ? updated : { ...payload, createdAt: new Date().toISOString() } as any;
           return [merged, ...rest];
         });
       } else {
-        const created: any = await api.products.create(form);
-        const newProd: any = created?.id ? created : { ...form, createdAt: new Date().toISOString() };
+        const created: any = await api.products.create(payload);
+        const newProd: any = created?.id ? created : { ...payload, createdAt: new Date().toISOString() };
         setProducts((prev) => [newProd, ...prev.filter((p) => p.id !== newProd.id)]);
         setSearch('');
         setCategoryFilter('All');
       }
+      setForm(payload);
       setErrors({});
       setShowModal(false);
       await loadData();
@@ -229,8 +239,11 @@ export default function AdminProducts() {
   };
 
   const handleStockToggle = async (product: Product) => {
+    const qty = Math.max(0, Number((product as any).quantity ?? 0));
+    const nextInStock = product.inStock === false;
+    if (nextInStock && qty <= 0) return;
     try {
-      await api.products.update(product.id, { ...product, inStock: !product.inStock });
+      await api.products.update(product.id, { ...product, quantity: qty, inStock: qty > 0 ? nextInStock : false });
       await loadData();
     } catch (error) {
       console.error('Failed to toggle stock:', error);
@@ -238,7 +251,17 @@ export default function AdminProducts() {
   };
 
   const updateForm = (key: string, value: unknown) => {
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value } as Product;
+      if (key === 'quantity') {
+        const prevQty = Math.max(0, Number((f as any).quantity ?? 0));
+        const qty = Math.max(0, Number(value ?? 0));
+        next.quantity = qty;
+        if (qty <= 0) next.inStock = false;
+        else if (prevQty <= 0) next.inStock = true;
+      }
+      return next;
+    });
   };
 
   const updateVariant = (index: number, key: keyof Variant, value: unknown) => {
@@ -315,8 +338,8 @@ export default function AdminProducts() {
   };
 
   const totalProducts = products.length;
-  const inStockCount = products.filter((p) => p.inStock !== false).length;
-  const outOfStockCount = products.filter((p) => p.inStock === false).length;
+  const inStockCount = products.filter((p) => !isOutOfStock(p)).length;
+  const outOfStockCount = products.filter((p) => isOutOfStock(p)).length;
 
   if (loading) {
     return (
@@ -402,7 +425,7 @@ export default function AdminProducts() {
             </thead>
             <tbody>
               {filtered.map((product) => (
-                <tr key={product.id} className={product.inStock === false ? 'admin-row-outofstock' : ''}>
+                <tr key={product.id} className={isOutOfStock(product) ? 'admin-row-outofstock' : ''}>
                   <td>
                     <div className="admin-product-cell">
                       <div className="admin-product-thumb-wrap">
@@ -446,19 +469,20 @@ export default function AdminProducts() {
                   <td>
                     <button
                       onClick={() => handleStockToggle(product)}
-                      className={`admin-stock-toggle ${product.inStock !== false ? 'in-stock' : 'out-of-stock'}`}
+                      disabled={getQuantity(product) <= 0}
+                      title={getQuantity(product) <= 0 ? 'Add quantity to mark this product in stock' : undefined}
+                      className={`admin-stock-toggle ${isOutOfStock(product) ? 'out-of-stock' : 'in-stock'}`}
+                      style={getQuantity(product) <= 0 ? { cursor: 'not-allowed', opacity: 0.75 } : undefined}
                     >
                       <span className="admin-stock-dot" />
-                      {product.inStock === false ? 'Out of Stock' : 'In Stock'}
+                      {isOutOfStock(product) ? 'Out of Stock' : 'In Stock'}
                     </button>
-                    {(product as any).quantity != null && (product as any).quantity > 0 && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--ink-soft)', marginTop: 4 }}>
-                        Qty: {(product as any).quantity}
-                        {(product as any).quantity <= 2 && (
-                          <span style={{ color: '#dc2626', fontWeight: 600, marginLeft: 4 }}>Low</span>
-                        )}
-                      </div>
-                    )}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--ink-soft)', marginTop: 4 }}>
+                      Qty: {getQuantity(product)}
+                      {getQuantity(product) > 0 && getQuantity(product) <= 2 && (
+                        <span style={{ color: '#dc2626', fontWeight: 600, marginLeft: 4 }}>Low</span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div className="admin-actions-cell">
@@ -547,8 +571,8 @@ export default function AdminProducts() {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Price</span><div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--maroon)' }}>₹{detailProduct.price.toLocaleString('en-IN')}{detailProduct.mrp ? <span style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', fontWeight: 400, textDecoration: 'line-through', marginLeft: 8 }}>₹{detailProduct.mrp.toLocaleString('en-IN')}</span> : null}</div></div>
-                        <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Stock</span><div><span className={`admin-status-badge ${detailProduct.inStock === false ? 'cancelled' : 'delivered'}`} style={{ marginTop: 4 }}>{detailProduct.inStock === false ? 'Out of Stock' : 'In Stock'}</span></div></div>
-                        {(detailProduct as any).quantity != null && <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Quantity</span><div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{(detailProduct as any).quantity} pieces{(detailProduct as any).quantity <= 2 && <span style={{ color: '#dc2626', marginLeft: 6, fontSize: '0.78rem' }}>Low stock</span>}</div></div>}
+                        <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Stock</span><div><span className={`admin-status-badge ${isOutOfStock(detailProduct) ? 'cancelled' : 'delivered'}`} style={{ marginTop: 4 }}>{isOutOfStock(detailProduct) ? 'Out of Stock' : 'In Stock'}</span></div></div>
+                        <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Quantity</span><div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{getQuantity(detailProduct)} pieces{isOutOfStock(detailProduct) ? <span style={{ color: '#dc2626', marginLeft: 6, fontSize: '0.78rem' }}>Out of stock</span> : getQuantity(detailProduct) <= 2 && <span style={{ color: '#dc2626', marginLeft: 6, fontSize: '0.78rem' }}>Low stock</span>}</div></div>
                       </div>
                       <div><span style={{ fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 700 }}>Description</span><div style={{ fontSize: '0.85rem', color: 'var(--ink-soft)', lineHeight: 1.6, marginTop: 4 }}>{detailProduct.description || 'No description'}</div></div>
                     </div>
@@ -672,7 +696,9 @@ export default function AdminProducts() {
                     <div className="admin-form-stock-toggle">
                       <button
                         type="button"
-                        className={`admin-stock-btn ${form.inStock !== false ? 'active' : ''}`}
+                        disabled={Number((form as any).quantity ?? 0) <= 0}
+                        title={Number((form as any).quantity ?? 0) <= 0 ? 'Add quantity first' : undefined}
+                        className={`admin-stock-btn ${form.inStock !== false && Number((form as any).quantity ?? 0) > 0 ? 'active' : ''}`}
                         onClick={() => updateForm('inStock', true)}
                       >
                         <span className="admin-stock-btn-dot in" />
@@ -680,13 +706,18 @@ export default function AdminProducts() {
                       </button>
                       <button
                         type="button"
-                        className={`admin-stock-btn ${form.inStock === false ? 'active' : ''}`}
+                        className={`admin-stock-btn ${form.inStock === false || Number((form as any).quantity ?? 0) <= 0 ? 'active' : ''}`}
                         onClick={() => updateForm('inStock', false)}
                       >
                         <span className="admin-stock-btn-dot out" />
                         Out of Stock
                       </button>
                     </div>
+                    {Number((form as any).quantity ?? 0) <= 0 && (
+                      <p style={{ fontSize: '0.72rem', color: '#dc2626', marginTop: '0.4rem' }}>
+                        Zero or empty quantity marks this product Out of Stock.
+                      </p>
+                    )}
                   </div>
                   <div className="admin-form-group">
                     <label>Quantity (Pieces)</label>
