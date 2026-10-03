@@ -200,8 +200,8 @@ router.post('/', async (req, res) => {
     const waMsg = encodeURIComponent(
       `Hi Village Allure,\n\nOrder Details:\nOrder ID: ${order.orderId}\nItems: ${itemList}\nTotal: ₹${order.total.toLocaleString('en-IN')}\nPayment: ${order.payment}\n\nShipping To:\n${order.name}\n${addressLine}\nPhone: ${order.phone}\n\nPlease confirm my order. Thank you!`
     );
-    const phone = (order.phone || '').replace(/\D/g, '');
-    const whatsappUrl = phone ? `https://wa.me/91${phone}?text=${waMsg}` : '';
+    const businessNumber = (process.env.WHATSAPP_BUSINESS_NUMBER || '916282655422').replace(/\D/g, '');
+    const whatsappUrl = businessNumber ? `https://wa.me/${businessNumber}?text=${waMsg}` : '';
 
     res.status(201).json({ ...order.toJSON(), whatsappUrl });
   } catch (error) {
@@ -260,7 +260,8 @@ router.put('/:id/status', auth, async (req, res) => {
       });
 
       const whatsappMsg = encodeURIComponent(`Hi ${order.name}, your order ${order.orderId} has been dispatched! Track your shipment here: ${trackingLink || 'Tracking link will be updated soon.'}`);
-      const whatsappUrl = order.phone ? `https://wa.me/91${order.phone.replace(/\D/g, '')}?text=${whatsappMsg}` : '';
+      const businessNumber = (process.env.WHATSAPP_BUSINESS_NUMBER || '916282655422').replace(/\D/g, '');
+      const whatsappUrl = businessNumber ? `https://wa.me/${businessNumber}?text=${whatsappMsg}` : '';
 
       const emailSubject = encodeURIComponent(`Your Order ${order.orderId} has been Dispatched!`);
       const emailBody = encodeURIComponent(`Hi ${order.name},\n\nYour order ${order.orderId} has been dispatched!\n\nTrack your shipment here: ${trackingLink || 'Tracking link will be updated soon.'}\n\nThank you for shopping with Village Allure!`);
